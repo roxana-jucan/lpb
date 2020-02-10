@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+		<title>Parsare membrii noi LPB</title>
+		<script lang="javascript" src="js/jquery-3.4.1.min.js"></script>
+		<script lang="javascript" src="js/xlsx.mini.js"></script>
+		<script lang="javascript" src="js/FileSaver.js"></script>
+		<link rel="stylesheet" type="text/css" href="css/styles.css" />
+
+		<script type="text/javascript">
+			var filteredMembers;
+			var communityExcelFile;
+			var currentDate = new Date();
+			var displaySteps = false;
+			var consoleLog = false;
+			
+			// excel generation code
+
+			function setCommunityExcelFile(file) {
+				communityExcelFile = file;
+			}
+
+			function stripMemberList() {
+				// the content of the editable field is parsed so that the formating is removed
+				const membersListAndExtra = document.getElementById('editableDiv').innerText;
+				// each line is treatead as a new element
+				const membersListAndExtraArray = membersListAndExtra.split('\n')
+					.map(function(item) {
+						return item.trim();
+					});
+
+				// duplicated values are eliminated
+				let uniqueValues = [...new Set(membersListAndExtraArray)];
+				// values that are prefixed with certain values such as "Message" "Joined"...
+				uniqueValues = uniqueValues.filter(item => isPrefixedWithValue(item) == false);
+				filteredMembers = uniqueValues;
+
+				if (displaySteps) {
+					let output = document.getElementById('firstStep');
+					output.innerHTML = JSON.stringify(filteredMembers, null, 2);	
+				}
+				if (consoleLog) {
+					console.log(filteredMembers);
+				}
+			}
+
+			function isPrefixedWithValue(testedValue) {
+				// prefixes to look for in the tested vallues
+				let arr = ['join date', 'message', 'new member', 'added by', 'joined', 'works', 'visual storyteller',
+					'academia', 'universi', 'liceul', 'facultate', 'grup scolar', 'colegiul', 'univ.', 'view ', 'scoala', 'master ', 'ase '];
+				// as it turns out there are other parts that might appear in the tested values, which indicate the values does not contain a name
+				// but  a location, study, fb activity or place of work
+				testedValue = testedValue.toLowerCase();
+				if (testedValue.includes(' at ') || testedValue.includes(', ') || !testedValue.includes(' ') || testedValue.includes('universit') || testedValue.includes('Conversation Starter')) {
+					return true;
+				}
+				let result = arr.find(item => testedValue.trim().startsWith(item));			
+				return result != undefined;
+			}
+			
+			function inverseNameSurname(fullName) {
+				if (fullName) {
+					var positionOfSpaceCharacter = fullName.lastIndexOf(' '); // last occurence of space
+					var firstPart = fullName.substring(0, positionOfSpaceCharacter); // Paul Steve
+					var secondPart = fullName.substring(positionOfSpaceCharacter + 1); // Panakkal
+
+					return secondPart + " " + firstPart ;
+				} 
+				return fullName;
+			}
+
+			function processMembers() {
+
+				firstStep.innerHTML = "";
+				secondStep.innerHTML = "";
+				thirdStep.innerHTML = "";
+				document.getElementById('resultHTML').innerHTML ="Procesare .";
+
+				stripMemberList();
+
+				// display message when no members were pasted
+				if (
+					filteredMembers == null ||
+					filteredMembers.length == 0 ||
+					(filteredMembers.length == 1 && filteredMembers[0] == '')
+				) {
+					document.getElementById('resultHTML').innerHTML = 'Nu s-au adaugat membrii de cautat';
+					return;
+				}
+
+				// display message when no file was uploaded
+				if (!communityExcelFile) {
+					document.getElementById('resultHTML').innerHTML = 'Nu a fost adaugat nici un fisier';
+					return;
+				}
+
+				let FR = new FileReader();
+				FR.onload = function(e) {
+				
+				
+				/*
+				async function readAllMemebersNames() {*/
+
+					let data = new Uint8Array(e.target.result);
+					let workbook = XLSX.read(data, { type: 'array' });
+					let firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+
+					// header: 1 instructs xlsx to create an 'array of arrays'
+					let result = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+					let header = result[0];
+					let indexOfFBName = 0;
+
+					for (let i = 0; i < header.length; i++) {
+						if (header[i] == 'Nume Facebook') {
+							indexOfFBName = i;
+						}
+					}
+
+					// FB name only
+					let fbNames = result.map(function(value, index) {
+						return value[indexOfFBName];
+					});
+
+					if (consoleLog) {
+						console.log(fbNames);
+					}
+					
+					/*return 1;
+				}
+				readAllMemebersNames().then(alert("done")); // 1
+				*/
+
+					fbNames = fbNames.filter(
+						communityMemberName => filteredMembers.indexOf(communityMemberName) !== -1
+					);
+					
+					document.getElementById('resultHTML').innerHTML ="Procesare ..";
+					if (displaySteps) {
+						let secondStep = document.getElementById('secondStep');
+						secondStep.innerHTML = JSON.stringify(fbNames, null, 2);
+					}
+					
+					let rowsToAdd = result.filter(memberData => 
+						fbNames.indexOf(memberData[indexOfFBName]) !== -1 
+						|| memberData == header 
+						|| fbNames.indexOf(inverseNameSurname(memberData[indexOfFBName])) !== -1
+					);
+
+					if (consoleLog) {
+						console.log(rowsToAdd[0]);
+					}
+					
+					document.getElementById('resultHTML').innerHTML ="Procesare ...";
+					if (displaySteps) {
+						let thirdStep = document.getElementById('thirdStep');
+						thirdStep.innerHTML = JSON.stringify(rowsToAdd, null, 2);
+					}
+					
+					////////////////////////////	
+					// Generare fisier Excel
+					var wb = XLSX.utils.book_new();
+					wb.Props = {
+						Title: 'Membrii',
+						Subject: 'Membrii de adaugat',
+						Author: 'LPBParser',
+						CreatedDate: currentDate
+					};
+					
+					let sheetName = 'Form Responses 1';
+					wb.SheetNames.push(sheetName);
+					var ws_data = rowsToAdd;
+					var ws = XLSX.utils.aoa_to_sheet(ws_data);
+					wb.Sheets[sheetName] = ws;
+					var wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
+					//////////////////////
+
+					if (consoleLog) {
+						console.log(currentDate.getUTCFullYear() + " "+ currentDate.getUTCMonth() + " " + currentDate.getUTCDate())
+					}
+					document.getElementById('resultHTML').innerHTML = "";
+										
+					if (wbout != null) {
+						saveAs(new Blob([s2ab(wbout)], { type: 'application/octet-stream' }), 'membrii'+timeStamp()+'.xlsx');
+					}
+				};
+			
+				FR.readAsArrayBuffer(communityExcelFile);
+				}
+			
+			function s2ab(s) {
+				var buf = new ArrayBuffer(s.length);
+				var view = new Uint8Array(buf);
+				for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xff;
+				return buf;
+			}
+
+			function timeStamp() {
+				// Create a date object with the current time
+				let now = new Date();
+
+				// Create an array with the current month, day and time
+				let date = [now.getFullYear(), now.getMonth() + 1, now.getDate()];
+
+				// Create an array with the current hour, minute and second
+				let time = [now.getHours(), now.getMinutes(), now.getSeconds()];
+
+				time[0] = time[0] || 12;
+
+				// If seconds and minutes are less than 10, add a zero
+				for ( let i = 1; i < 3; i++ ) {
+					if ( time[i] < 10 ) {
+					time[i] = "0" + time[i];
+					}
+				}
+
+				// Return the formatted string
+				return "_" + date.join("") + "_" + time.join("") + " ";
+			}
+		</script>
+	</head>
+
+	<body>
+		<div class="center">
+			<div class="header">
+				<div class="logo">
+					<h1>
+						<a title="La Primul bebe" href="https://www.laprimulbebe.ro/">
+							<img
+								src="http://www.laprimulbebe.ro/wp-content/uploads/2017/01/Logo-cu-R.png"
+								alt="La Primul bebe"
+							/>
+						</a>
+					</h1>
+				</div>
+			</div>
+			<br />
+			Fisier "Înscriere în comunitatea LPB":
+			<input type="file" id="communityExcelFile" accept=".xls,.xlsx,.ods" />
+			<br /><br />
+
+			<div id="editableDiv" contenteditable="true"></div>
+			<br />
+
+			<input type="button" value="Generare lista membrii" onclick="processMembers()" />
+			<br /><br />
+
+			<input type="checkbox" value="displayStepsOption" name="displayStepsOption" id="displayStepsOption" /><label for="vehicle1"> Afisare pasi</label><br>
+			<br />
+				
+			<div id="resultHTML"></div>
+			<br />
+
+			<div class="row" id="stepsPanel1" >
+				<div class="column">Pas 2, 3 si 4</div>
+				<div class="column">Pas 6 - 9</div>
+				<div class="column">Membrii de adaugat in BD</div>
+			</div>
+
+			<div class="row" id="stepsPanel1">
+				<div class="column"><pre id="firstStep"></pre></div>
+				<div class="column"><pre id="secondStep"></pre></div>
+				<div class="column"><pre id="thirdStep"></pre></div>
+			</div>
+		</div>
+
+		<script>
+			$('#communityExcelFile').on('change', function(e) {
+				setCommunityExcelFile(e.target.files[0]);
+			});
+		</script>
+		
+		<script>
+
+		$(document).ready(function(){
+			$("#stepsPanel1").hide();
+			$("#stepsPanel2").hide();
+			$("#displayStepsOption").click(function(){
+				displaySteps = $("#displayStepsOption").prop("checked");
+				if (displaySteps) {	
+					$("#stepsPanel1").show();
+					$("#stepsPanel2").show();
+				} else {
+					$("#stepsPanel1").hide();
+					$("#stepsPanel2").hide();
+				}
+			});
+		});
+
+	</script>
+
+<!-- The core Firebase JS SDK is always required and must be listed first -->
+<script src="/__/firebase/7.4.0/firebase-app.js"></script>
+
+<!-- TODO: Add SDKs for Firebase products that you want to use
+     https://firebase.google.com/docs/web/setup#available-libraries -->
+<script src="/__/firebase/7.4.0/firebase-analytics.js"></script>
+
+<!-- Initialize Firebase -->
+<script src="/__/firebase/init.js">
+
+</script>
+	</body>
+</html>

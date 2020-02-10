@@ -1,0 +1,45 @@
+body {
+    background: #f5f2eb repeat-x;
+}
+#editableDiv {
+    width: 100%;
+    height: 250px;
+    max-height: 500px;
+    display: inline-block;
+    background-color: #f0ffff;
+    overflow-y: scroll;
+    border-width: 1px;
+    border-color: black;
+    border-style: solid;
+}
+
+#resultDiv {
+    width: 1000px;
+    overflow-y: scroll;
+    border-width: 1px;
+    border-color: black;
+    border-style: solid;
+}
+
+.center {
+    width: 800px;
+    margin: auto;
+}
+.header {
+    border-bottom: #d1a3e9 3px solid;
+}
+.logo {
+    text-align: right;
+}
+
+.column {
+    float: left;
+    width: 33%;
+}
+
+/* Clear floats after the columns */
+.row:after {
+    content: '';
+    display: table;
+    clear: both;
+}
