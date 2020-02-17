@@ -132,7 +132,9 @@
 				*/
 
 					fbNames = fbNames.filter(
-						communityMemberName => filteredMembers.indexOf(communityMemberName) !== -1
+						communityMemberName => 
+						(filteredMembers.indexOf(communityMemberName) !== -1 ||
+						filteredMembers.indexOf(inverseNameSurname(communityMemberName)) !== -1)
 					);
 					
 					document.getElementById('resultHTML').innerHTML ="Procesare ..";
@@ -144,7 +146,6 @@
 					let rowsToAdd = result.filter(memberData => 
 						fbNames.indexOf(memberData[indexOfFBName]) !== -1 
 						|| memberData == header 
-						|| fbNames.indexOf(inverseNameSurname(memberData[indexOfFBName])) !== -1
 					);
 
 					if (consoleLog) {
